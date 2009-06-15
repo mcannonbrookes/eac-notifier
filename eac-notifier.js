@@ -2,11 +2,7 @@ function NetworkNotifier(doc){
   var that = this;
   $(doc).click(this.goToNetwork);
   that.update(doc);
-
-  //  var body = $(jetpack.tabs.focused.contentDocument).find("body");
-  //  $('<div style="border: 1px solid red; position:absolute; padding: 10px; bottom: 0px; right: 0px;">test</div>')
-    //  .appendTo(body);
-    
+  
   setInterval( function(){
     that.update(doc);
   }, 60*1000 );
@@ -14,16 +10,15 @@ function NetworkNotifier(doc){
 
 NetworkNotifier.prototype = {
   ids: {},
-  icons: {},
   
   goToNetwork: function(){
-    //jetpack.tabs.open("https://extranet.atlassian.com/users/viewfollow.action");
-    //jetpack.tabs[ Jetpack.tabs.length-1 ].focus();
+    jetpack.tabs.open("https://extranet.atlassian.com/users/viewfollow.action");
+    jetpack.tabs[ Jetpack.tabs.length-1 ].focus();
   },
   
   update: function(doc){
     console.log('update() ' + new Date());
-    var url = "https://extranet.atlassian.com/feeds/follow.action?username=mike&contentType=USER_STATUS&publicFeed=false&os_authType=basic&rssType=atom&output=atom";
+    var url = "https://extranet.atlassian.com/feeds/follow.action?contentType=USER_STATUS&publicFeed=false&os_authType=basic&rssType=atom&output=atom";
     doc = $(doc);
     var that = this;
     $.get( url, function(xml){
@@ -40,6 +35,13 @@ NetworkNotifier.prototype = {
           var text = $(this).find('summary').text();
           var icon = 'http://confluence.atlassian.com/s/1619/13/_/images/logo/confluence_16.png';
 
+          // try to work out if we're a status message or not, by the first characters
+          if (title.length > author.length && title.substring(0, author.length) == author)
+          {
+            title = title.substring(author.length + 1);
+          }
+
+          
           if (displayCount++ < 15) {
              var idx = text.indexOf('/display/~');
              if (idx > 0) {
@@ -47,18 +49,27 @@ NetworkNotifier.prototype = {
                 if (endIdx > 0) {
                    var username = text.substring(idx + '/display~'.length + 1, endIdx);
                    // console.log(username);
-                   $.get("https://extranet.atlassian.com/users/userinfopopup.action?username=" + username, { },
-                   function(data){
-                      // console.log(data.length);
-                      icon = 'https://extranet.atlassian.com' + $(data).find('img.userLogo').attr('src');
-                      // console.log(icon);
-                      jetpack.notifications.show(
-                        {'title': author, 
-                        'body': title.substring(author.length + 1), 
-                        'icon': icon
-                        }
-                      );
-                   });
+                   if (!jetpack.storage.live.confAvatars)
+                      jetpack.storage.live.confAvatars = { };
+                   if (jetpack.storage.live.confAvatars[username]) {
+                        console.log("Already got icon for " + username + " - displaying now.");
+                        jetpack.notifications.show({'title': author, 
+                        'body': title, 
+                        'icon': jetpack.storage.live.confAvatars[username]});
+                   }
+                   else { // we don't have an icon for that user yet, go get it
+                      console.log("Getting icon for " + username + " as not cached.");
+                      $.get("https://extranet.atlassian.com/users/userinfopopup.action?username=" + username, { },
+                      function(data){
+                          // console.log(data.length);
+                          icon = 'https://extranet.atlassian.com' + $(data).find('img.userLogo').attr('src');
+                          jetpack.storage.live.confAvatars[username] = icon;
+                          // console.log(icon);
+                          jetpack.notifications.show({'title': author, 
+                            'body': title, 
+                            'icon': icon});
+                      });
+                   }
                 }
              }
           }
